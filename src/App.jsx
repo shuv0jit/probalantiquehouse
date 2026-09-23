@@ -107,7 +107,7 @@ function Storefront() {
             <div className="foot__heading">Get in Touch</div>
             <a href="tel:01788663766" className="foot__link">📞 01788663766</a>
             <a
-              href="https://wa.me/8801788663766"
+              href="https://wa.me/8801723689819"
               target="_blank"
               rel="noopener noreferrer"
               className="foot__whatsapp-btn"
@@ -127,7 +127,7 @@ function Storefront() {
       </footer>
 
       <BackToTop />
-      <WhatsAppFloat number="8801819310816" />
+      <WhatsAppFloat number="8801723689819" />
     </>
   );
 }
