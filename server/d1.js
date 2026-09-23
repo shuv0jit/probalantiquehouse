@@ -99,22 +99,32 @@ export async function run(sql, params = []) {
  * @param {Array<{sql: string, params?: any[]}>} statements
  * @param {Array<{sql: string, params?: any[]}>} [compensate] run in order on failure
  */
+/**
+ * Run several statements as ONE HTTP call to D1, executed as a single
+ * transaction. This replaces the old one-request-per-statement version,
+ * which is why large batches (dozens of products/images) were slow and
+ * could time out.
+ */
 export async function batch(statements, compensate = []) {
-  const results = [];
+  if (!statements.length) return [];
   try {
-    for (const stmt of statements) {
-      results.push(await run(stmt.sql, stmt.params ?? []));
-    }
-    return results;
+    const result = await call(
+      '/query',
+      statements.map((s) => ({ sql: s.sql, params: s.params ?? [] }))
+    );
+    return Array.isArray(result) ? result : [result];
   } catch (err) {
-    for (const undo of compensate) {
-      try {
-        await run(undo.sql, undo.params ?? []);
-      } catch {
-        // Nothing more we can do; the original error is the one that matters.
+    // Fallback: run one at a time, and undo on failure.
+    const results = [];
+    try {
+      for (const stmt of statements) results.push(await run(stmt.sql, stmt.params ?? []));
+      return results;
+    } catch (err2) {
+      for (const undo of compensate) {
+        try { await run(undo.sql, undo.params ?? []); } catch { /* best effort */ }
       }
+      throw err2;
     }
-    throw err;
   }
 }
 

@@ -209,9 +209,9 @@ export default function AdminApp() {
               <RefreshCw size={15} style={justSynced ? { animation: 'spin 700ms var(--ease)' } : undefined} />
             </button>
 
-            <button className="btn btn--primary btn--sm" onClick={() => { setView('products'); setAddOpen(true); }}>
-              <Plus size={15} /> Add products
-            </button>
+            <button className="btn btn--primary btn--sm" onClick={() => { setView('products'); setAddOpen(true); }} aria-label="Add products">
+  <Plus size={15} /> <span className="adm__addlbl">Add products</span>
+</button>
           </div>
         </header>
 

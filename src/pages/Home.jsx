@@ -96,7 +96,7 @@
       [products, savedOnly, favourites]
     );
 
-    useReveal([shown.length, savedOnly]);
+useReveal([shown.length, savedOnly, loading, sort, collectionId]);
 
     /* --------------------------------------------------------- actions */
     const pick = useCallback(
