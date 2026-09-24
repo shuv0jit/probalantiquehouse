@@ -386,6 +386,8 @@
   border-radius: var(--r-lg);
   overflow: hidden;
   box-shadow: var(--sh-1);
+    content-visibility: auto;
+  contain-intrinsic-size: 0 320px;
   transition: transform var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease),
               border-color var(--t-base) var(--ease);
 }

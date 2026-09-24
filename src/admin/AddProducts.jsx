@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, ImagePlus, UploadCloud, X } from 'lucide-react';
-import { api, readDimensions, uploadToStorage } from '../lib/api.js';
+import { api, compressImage, uploadToStorage } from '../lib/api.js';
 import { useStore } from '../lib/store.jsx';
 import { CollectionSelect, Field, FormError, Modal } from './ui.jsx';
 
@@ -41,8 +41,8 @@ export default function AddProducts({ open, onClose, overview, reload, defaultCo
     if (rejected) toast(`${rejected} file${rejected === 1 ? ' was' : 's were'} skipped — images only.`, 'info');
     if (!incoming.length) return;
 
-    const measured = await Promise.all(
-      incoming.map(async (file) => ({ file, progress: 0, ...(await readDimensions(file)) }))
+      const measured = await Promise.all(
+      incoming.map(async (file) => ({ progress: 0, ...(await compressImage(file)) }))
     );
 
     setFiles((prev) => {

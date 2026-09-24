@@ -74,3 +74,39 @@ export function readDimensions(file) {
     img.src = url;
   });
 }
+
+/**
+ * Downscale + re-encode an image in the browser before upload. Jewellery
+ * photos from phone cameras are often 3000px+ and several MB — this caps the
+ * long edge and re-encodes as JPEG, which is the single biggest lever for
+ * fast product-image loading on the storefront (nothing to download server-
+ * side, nothing extra to store, no DB writes).
+ */
+export function compressImage(file, { maxDim = 1600, quality = 0.82 } = {}) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.round(img.naturalWidth * scale);
+      const h = Math.round(img.naturalHeight * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(
+        (blob) => {
+          URL.revokeObjectURL(url);
+          if (!blob) return resolve({ file, width: img.naturalWidth, height: img.naturalHeight, preview: url });
+          const compressed = new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' });
+          resolve({ file: compressed, width: w, height: h, preview: URL.createObjectURL(compressed) });
+        },
+        'image/jpeg',
+        quality
+      );
+    };
+    img.onerror = () => resolve({ file, width: null, height: null, preview: url });
+    img.src = url;
+  });
+}

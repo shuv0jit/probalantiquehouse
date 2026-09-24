@@ -98,6 +98,18 @@
 
 useReveal([shown.length, savedOnly, loading, sort, collectionId]);
 
+  // Warm the connection to the image host as soon as we know it, so the
+  // very first product photo doesn't pay a fresh DNS+TLS cost.
+  useEffect(() => {
+    const first = shown[0]?.images?.[0]?.url;
+    if (!first || document.getElementById('img-preconnect')) return;
+    const link = document.createElement('link');
+    link.id = 'img-preconnect';
+    link.rel = 'preconnect';
+    link.href = new URL(first).origin;
+    document.head.appendChild(link);
+  }, [shown]);
+
     /* --------------------------------------------------------- actions */
     const pick = useCallback(
       (id) => {

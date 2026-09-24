@@ -26,8 +26,9 @@ export default function ProductCard({ product, favourite, onToggleFavourite, ind
               className={`card__img${loaded ? ' is-loaded' : ''}`}
               src={primary.url}
               alt={product.title || `${product.path.map((p) => p.name).join(' ')} — piece ${product.code}`}
-              loading="lazy"
+                           loading={index < 6 ? 'eager' : 'lazy'}
               decoding="async"
+              fetchpriority={index < 4 ? 'high' : 'auto'}
               width={primary.width || undefined}
               height={primary.height || undefined}
               onLoad={() => setLoaded(true)}

@@ -70,10 +70,11 @@ export async function presignUpload({ contentType, size }) {
 
   const url = await getSignedUrl(
     client(),
-    new PutObjectCommand({
-      Bucket: process.env.SUFY_BUCKET,
+        new PutObjectCommand({
+      Bucket: process.env.B2_BUCKET,
       Key: key,
       ContentType: contentType,
+      CacheControl: 'public, max-age=31536000, immutable',
     }),
     { expiresIn: 600 }
   );
