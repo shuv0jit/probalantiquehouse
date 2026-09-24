@@ -1,21 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CornerDownLeft, FolderOpen, Hash, Search, X } from 'lucide-react';
+import { CornerDownLeft, FolderOpen, Hash, Search, Sparkles, X } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { useDebounced, useEscape, useFocusTrap, useScrollLock } from '../lib/hooks.js';
 import { money } from '../lib/format.js';
+import { useSwipe } from '../lib/useSwipe.js';
 
 /**
- * Search: debounced, case-insensitive, partial-match, keyboard driven.
- * Results are grouped — collections first (they answer "where do I browse?"),
- * then products (they answer "I know the number"). Arrow keys move a cursor
- * across the flattened list; Enter opens whatever the cursor is on.
+ * Search overlay. Desktop: a centered floating panel (unchanged in spirit).
+ * Mobile: a bottom sheet — slides up from the edge, has a drag handle, and
+ * can be swiped down to close, which reads as native rather than a popup.
+ * Also surfaces the server's synonym expansion ("also searching: ...") so
+ * Bangla/Banglish matches don't feel invisible.
  */
 export default function SearchOverlay({ open, onClose, onPickCollection }) {
   const [q, setQ] = useState('');
-  const [results, setResults] = useState({ collections: [], products: [] });
+  const [results, setResults] = useState({ collections: [], products: [], expanded: [] });
   const [busy, setBusy] = useState(false);
   const [cursor, setCursor] = useState(0);
+  const [dragY, setDragY] = useState(0);
+  const [dragging, setDragging] = useState(false);
   const panelRef = useRef(null);
   const inputRef = useRef(null);
   const navigate = useNavigate();
@@ -25,12 +29,49 @@ export default function SearchOverlay({ open, onClose, onPickCollection }) {
   useEscape(onClose, open);
   useFocusTrap(panelRef, open);
 
+  useSwipe(panelRef, {
+    enabled: open,
+    onDrag: (dy, dx) => {
+      // Only respond to a downward drag that starts near the handle area —
+      // useSwipe reports horizontal dx; we read vertical via onDrag's second
+      // value when the hook supports it, otherwise this is a no-op on desktop.
+    },
+  });
+
+  // Manual vertical drag (useSwipe is horizontal-first); simple + reliable for a sheet.
+  const dragState = useRef({ startY: 0, active: false });
+  const onHandlePointerDown = (e) => {
+    dragState.current = { startY: e.clientY, active: true };
+    setDragging(true);
+  };
+  useEffect(() => {
+    const move = (e) => {
+      if (!dragState.current.active) return;
+      const dy = e.clientY - dragState.current.startY;
+      if (dy > 0) setDragY(dy);
+    };
+    const up = () => {
+      if (!dragState.current.active) return;
+      dragState.current.active = false;
+      setDragging(false);
+      if (dragY > 90) onClose();
+      setDragY(0);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+  }, [dragY, onClose]);
+
   useEffect(() => {
     if (open) {
       setQ('');
-      setResults({ collections: [], products: [] });
+      setResults({ collections: [], products: [], expanded: [] });
       setCursor(0);
-      setTimeout(() => inputRef.current?.focus(), 40);
+      setDragY(0);
+      setTimeout(() => inputRef.current?.focus(), open && window.innerWidth > 640 ? 40 : 260);
     }
   }, [open]);
 
@@ -38,7 +79,7 @@ export default function SearchOverlay({ open, onClose, onPickCollection }) {
     if (!open) return;
     const term = debounced.trim();
     if (!term) {
-      setResults({ collections: [], products: [] });
+      setResults({ collections: [], products: [], expanded: [] });
       setBusy(false);
       return;
     }
@@ -47,11 +88,11 @@ export default function SearchOverlay({ open, onClose, onPickCollection }) {
     api
       .get(`/search?q=${encodeURIComponent(term)}`, { signal: controller.signal })
       .then((data) => {
-        setResults({ collections: data.collections, products: data.products });
+        setResults({ collections: data.collections, products: data.products, expanded: data.expanded || [] });
         setCursor(0);
       })
       .catch((err) => {
-        if (err.name !== 'AbortError') setResults({ collections: [], products: [] });
+        if (err.name !== 'AbortError') setResults({ collections: [], products: [], expanded: [] });
       })
       .finally(() => setBusy(false));
     return () => controller.abort();
@@ -84,7 +125,19 @@ export default function SearchOverlay({ open, onClose, onPickCollection }) {
   return (
     <div className="search-wrap" role="dialog" aria-modal="true" aria-label="Search">
       <div className="search-scrim" onClick={onClose} />
-      <div className="search" ref={panelRef}>
+      <div
+        className="search"
+        ref={panelRef}
+        style={dragY ? { transform: `translateY(${dragY}px)`, transition: 'none' } : undefined}
+      >
+        <div
+          className="search__handle"
+          onPointerDown={onHandlePointerDown}
+          aria-hidden="true"
+        >
+          <span />
+        </div>
+
         <div className="search__bar">
           <Search size={18} style={{ color: 'var(--ink-3)', flex: 'none' }} />
           <input
@@ -92,25 +145,34 @@ export default function SearchOverlay({ open, onClose, onPickCollection }) {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Search a collection or a 6-digit piece number…"
+            placeholder="Search jhumka, kaner dul, or a piece number…"
             aria-label="Search collections and products"
             autoComplete="off"
             inputMode="search"
           />
           {busy && <div className="spinner" style={{ width: 15, height: 15 }} aria-hidden="true" />}
-          <button className="search__esc" onClick={onClose} aria-label="Close search">ESC</button>
+          <button className="search__esc" onClick={onClose} aria-label="Close search">
+            <X size={15} />
+          </button>
         </div>
+
+        {results.expanded.length > 0 && (
+          <div className="search__expanded">
+            <Sparkles size={12} />
+            <span>also matching: {results.expanded.slice(0, 5).join(', ')}</span>
+          </div>
+        )}
 
         <div className="search__body">
           {!term && (
             <div className="search__empty">
-              Try <strong>necklace</strong>, <strong>jhumka</strong>, or a piece number like <strong>101245</strong>.
+              Try <strong>jhumka</strong>, <strong>ঝুমকা</strong>, <strong>kaner dul</strong>, or a piece number like <strong>101245</strong>.
             </div>
           )}
 
           {term && !busy && flat.length === 0 && (
             <div className="search__empty">
-              Nothing matched “{term}”. Try a shorter word or a different spelling.
+              Nothing matched "{term}". Try a shorter word, English, or Bangla spelling.
             </div>
           )}
 

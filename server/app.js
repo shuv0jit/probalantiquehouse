@@ -9,6 +9,7 @@ import { COOKIE_NAME, cookieOptions, requireAdmin, signToken, verifyPassword, ve
 import { allocateCodes, upliftForCode } from './codes.js';
 import { buildDiscountMap, isLive, priceBlock, todayISO } from './pricing.js';
 import { deleteObjects, presignUpload, storageConfigured } from './storage.js';
+import { expandSearchTerms } from './synonyms.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -287,14 +288,17 @@ app.get(
   '/api/search',
   h(async (req, res) => {
     const q = String(req.query.q || '').trim().slice(0, 60);
-    if (q.length < 1) return ok(res, { collections: [], products: [] });
+    if (q.length < 1) return ok(res, { collections: [], products: [], expanded: [] });
 
     const { collections, map } = await loadDiscountContext();
     const collectionsById = new Map(collections.map((c) => [c.id, c]));
-    const needle = q.toLowerCase();
+    const terms = expandSearchTerms(q); // original query + Bangla/Banglish/English synonyms
 
     const matchedCollections = collections
-      .filter((c) => c.name.toLowerCase().includes(needle))
+      .filter((c) => {
+        const name = c.name.toLowerCase();
+        return terms.some((t) => name.includes(t));
+      })
       .slice(0, 6)
       .map((c) => {
         const trail = [];
@@ -306,20 +310,25 @@ app.get(
         return { id: c.id, name: c.name, trail };
       });
 
-    // Product matches: by code (exact/partial) and by title/description.
     const digits = q.replace(/\D/g, '');
+    const params = [digits, digits ? `${digits}%` : '\u0000'];
+    const textConds = [];
+    terms.forEach((t) => {
+      params.push(`%${t}%`);
+      textConds.push(`LOWER(COALESCE(title,'')) LIKE ?${params.length}`);
+      params.push(`%${t}%`);
+      textConds.push(`LOWER(COALESCE(description,'')) LIKE ?${params.length}`);
+    });
+
     const rows = await all(
       `SELECT * FROM products
        WHERE deleted_at IS NULL
-         AND ( (?1 != '' AND code LIKE ?2)
-            OR LOWER(COALESCE(title,'')) LIKE ?3
-            OR LOWER(COALESCE(description,'')) LIKE ?3 )
+         AND ( (?1 != '' AND code LIKE ?2) OR ${textConds.join(' OR ')} )
        ORDER BY (code = ?1) DESC, created_at DESC
        LIMIT 8`,
-      [digits, `${digits}%`, `%${needle}%`]
+      params
     );
 
-    // Also surface products inside a matched collection, so "necklace" returns items.
     let extra = [];
     if (matchedCollections.length && rows.length < 8) {
       const ids = matchedCollections.flatMap((c) => subtreeIds(collections, c.id));
@@ -339,6 +348,7 @@ app.get(
     ok(res, {
       collections: matchedCollections,
       products: products.map((p) => shapeProduct(p, map, collectionsById)),
+      expanded: terms.filter((t) => t !== q.toLowerCase()), // the extra terms it also searched
     });
   })
 );
