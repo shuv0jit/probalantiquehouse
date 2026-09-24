@@ -21,6 +21,8 @@ export default function SearchOverlay({ open, onClose, onPickCollection }) {
   const inputRef = useRef(null);
   const navigate = useNavigate();
   const debounced = useDebounced(q, 140);
+    const isTypingAhead = q.trim() !== debounced.trim();
+  const isSearching = busy || isTypingAhead;
 
   useScrollLock(open);
   useEscape(onClose, open);
@@ -123,7 +125,14 @@ export default function SearchOverlay({ open, onClose, onPickCollection }) {
             </div>
           )}
 
-          {term && !busy && flat.length === 0 && (
+                    {term && isSearching && (
+            <div className="search__empty search__empty--loading">
+              <div className="spinner" aria-hidden="true" />
+              <span>Searching…</span>
+            </div>
+          )}
+
+          {term && !isSearching && flat.length === 0 && (
             <div className="search__empty">
               Nothing matched "{term}".
               {results.suggestion && (
@@ -139,7 +148,7 @@ export default function SearchOverlay({ open, onClose, onPickCollection }) {
             </div>
           )}
 
-          {results.collections.length > 0 && (
+                    {!isSearching && results.collections.length > 0 && (
             <>
               <div className="search__group eyebrow">Collections</div>
               {results.collections.map((c, i) => (
@@ -161,7 +170,7 @@ export default function SearchOverlay({ open, onClose, onPickCollection }) {
             </>
           )}
 
-          {results.products.length > 0 && (
+                   {!isSearching && results.products.length > 0 && (
             <>
               <div className="search__group eyebrow">Pieces</div>
               {results.products.map((p, i) => {

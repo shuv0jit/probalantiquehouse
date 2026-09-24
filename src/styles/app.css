@@ -576,6 +576,13 @@
   padding: 54px 20px; text-align: center; color: var(--ink-3); font-size: 13.5px;
   animation: fade-in 220ms var(--ease) both;
 }
+
+.search__empty--loading {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 40px 20px;
+}
+.search__empty--loading .spinner { width: 16px; height: 16px; }
+
 .search__suggest {
   color: var(--rose); font-weight: 600;
   text-decoration: underline; text-underline-offset: 3px;
