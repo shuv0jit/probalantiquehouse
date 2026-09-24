@@ -100,6 +100,43 @@ export const SYNONYM_GROUPS = [
   ['daily wear', 'regular', 'নিয়মিত ব্যবহারের'],
   ['kids jewellery', 'baby jewellery', 'bachchader gohona', 'বাচ্চাদের গহনা'],
 ];
+
+/** Plain Levenshtein edit distance — used to suggest a close spelling when a search finds nothing. */
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  if (!m) return n;
+  if (!n) return m;
+  const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+/** English-readable vocabulary pulled from the synonym groups, for suggestions. */
+export const ENGLISH_VOCAB = SYNONYM_GROUPS.flatMap((g) => g.filter((t) => /^[a-zA-Z ]+$/.test(t)));
+
+/** Closest known term to a query that found no results, or null if nothing is close enough. */
+export function closestSuggestion(query, vocabulary) {
+  const q = query.trim().toLowerCase();
+  if (!q) return null;
+  let best = null;
+  let bestDist = Infinity;
+  for (const term of vocabulary) {
+    const t = term.toLowerCase();
+    if (t === q) continue;
+    const d = levenshtein(q, t);
+    const threshold = Math.max(2, Math.ceil(t.length * 0.4));
+    if (d < bestDist && d <= threshold) {
+      bestDist = d;
+      best = term;
+    }
+  }
+  return best;
+}
 /**
  * Given a raw query, return every term to search: the original plus every
  * term from any group it matches (substring either direction, so "jhumka"

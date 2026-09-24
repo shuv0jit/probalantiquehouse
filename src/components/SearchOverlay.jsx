@@ -4,74 +4,34 @@ import { CornerDownLeft, FolderOpen, Hash, Search, Sparkles, X } from 'lucide-re
 import { api } from '../lib/api.js';
 import { useDebounced, useEscape, useFocusTrap, useScrollLock } from '../lib/hooks.js';
 import { money } from '../lib/format.js';
-import { useSwipe } from '../lib/useSwipe.js';
 
 /**
- * Search overlay. Desktop: a centered floating panel (unchanged in spirit).
- * Mobile: a bottom sheet — slides up from the edge, has a drag handle, and
- * can be swiped down to close, which reads as native rather than a popup.
- * Also surfaces the server's synonym expansion ("also searching: ...") so
- * Bangla/Banglish matches don't feel invisible.
+ * Search: a top-docked command bar (not a centered popup). Drops down from
+ * under the navbar, dims the page behind it, and stays anchored to the top
+ * so typing and results feel like one continuous surface rather than a modal.
+ * Debounce is short (140ms) and results replace in place — no layout jump —
+ * so fast typing never feels like it's fighting the UI.
  */
 export default function SearchOverlay({ open, onClose, onPickCollection }) {
   const [q, setQ] = useState('');
-  const [results, setResults] = useState({ collections: [], products: [], expanded: [] });
+  const [results, setResults] = useState({ collections: [], products: [], expanded: [], suggestion: null });
   const [busy, setBusy] = useState(false);
   const [cursor, setCursor] = useState(0);
-  const [dragY, setDragY] = useState(0);
-  const [dragging, setDragging] = useState(false);
   const panelRef = useRef(null);
   const inputRef = useRef(null);
   const navigate = useNavigate();
-  const debounced = useDebounced(q, 200);
+  const debounced = useDebounced(q, 140);
 
   useScrollLock(open);
   useEscape(onClose, open);
   useFocusTrap(panelRef, open);
 
-  useSwipe(panelRef, {
-    enabled: open,
-    onDrag: (dy, dx) => {
-      // Only respond to a downward drag that starts near the handle area —
-      // useSwipe reports horizontal dx; we read vertical via onDrag's second
-      // value when the hook supports it, otherwise this is a no-op on desktop.
-    },
-  });
-
-  // Manual vertical drag (useSwipe is horizontal-first); simple + reliable for a sheet.
-  const dragState = useRef({ startY: 0, active: false });
-  const onHandlePointerDown = (e) => {
-    dragState.current = { startY: e.clientY, active: true };
-    setDragging(true);
-  };
-  useEffect(() => {
-    const move = (e) => {
-      if (!dragState.current.active) return;
-      const dy = e.clientY - dragState.current.startY;
-      if (dy > 0) setDragY(dy);
-    };
-    const up = () => {
-      if (!dragState.current.active) return;
-      dragState.current.active = false;
-      setDragging(false);
-      if (dragY > 90) onClose();
-      setDragY(0);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    return () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-    };
-  }, [dragY, onClose]);
-
   useEffect(() => {
     if (open) {
       setQ('');
-      setResults({ collections: [], products: [], expanded: [] });
+      setResults({ collections: [], products: [], expanded: [], suggestion: null });
       setCursor(0);
-      setDragY(0);
-      setTimeout(() => inputRef.current?.focus(), open && window.innerWidth > 640 ? 40 : 260);
+      setTimeout(() => inputRef.current?.focus(), 60);
     }
   }, [open]);
 
@@ -79,7 +39,7 @@ export default function SearchOverlay({ open, onClose, onPickCollection }) {
     if (!open) return;
     const term = debounced.trim();
     if (!term) {
-      setResults({ collections: [], products: [], expanded: [] });
+      setResults({ collections: [], products: [], expanded: [], suggestion: null });
       setBusy(false);
       return;
     }
@@ -88,11 +48,16 @@ export default function SearchOverlay({ open, onClose, onPickCollection }) {
     api
       .get(`/search?q=${encodeURIComponent(term)}`, { signal: controller.signal })
       .then((data) => {
-        setResults({ collections: data.collections, products: data.products, expanded: data.expanded || [] });
+        setResults({
+          collections: data.collections,
+          products: data.products,
+          expanded: data.expanded || [],
+          suggestion: data.suggestion || null,
+        });
         setCursor(0);
       })
       .catch((err) => {
-        if (err.name !== 'AbortError') setResults({ collections: [], products: [], expanded: [] });
+        if (err.name !== 'AbortError') setResults({ collections: [], products: [], expanded: [], suggestion: null });
       })
       .finally(() => setBusy(false));
     return () => controller.abort();
@@ -125,21 +90,9 @@ export default function SearchOverlay({ open, onClose, onPickCollection }) {
   return (
     <div className="search-wrap" role="dialog" aria-modal="true" aria-label="Search">
       <div className="search-scrim" onClick={onClose} />
-      <div
-        className="search"
-        ref={panelRef}
-        style={dragY ? { transform: `translateY(${dragY}px)`, transition: 'none' } : undefined}
-      >
-        <div
-          className="search__handle"
-          onPointerDown={onHandlePointerDown}
-          aria-hidden="true"
-        >
-          <span />
-        </div>
-
+      <div className="search" ref={panelRef}>
         <div className="search__bar">
-          <Search size={18} style={{ color: 'var(--ink-3)', flex: 'none' }} />
+          <Search size={19} style={{ color: 'var(--ink-3)', flex: 'none' }} />
           <input
             ref={inputRef}
             value={q}
@@ -150,7 +103,7 @@ export default function SearchOverlay({ open, onClose, onPickCollection }) {
             autoComplete="off"
             inputMode="search"
           />
-          {busy && <div className="spinner" style={{ width: 15, height: 15 }} aria-hidden="true" />}
+          {busy && <div className="spinner" style={{ width: 16, height: 16 }} aria-hidden="true" />}
           <button className="search__esc" onClick={onClose} aria-label="Close search">
             <X size={15} />
           </button>
@@ -172,7 +125,17 @@ export default function SearchOverlay({ open, onClose, onPickCollection }) {
 
           {term && !busy && flat.length === 0 && (
             <div className="search__empty">
-              Nothing matched "{term}". Try a shorter word, English, or Bangla spelling.
+              Nothing matched "{term}".
+              {results.suggestion && (
+                <>
+                  <br />
+                  Did you mean{' '}
+                  <button className="search__suggest" onClick={() => setQ(results.suggestion)}>
+                    {results.suggestion}
+                  </button>
+                  ?
+                </>
+              )}
             </div>
           )}
 
@@ -183,6 +146,7 @@ export default function SearchOverlay({ open, onClose, onPickCollection }) {
                 <button
                   key={`c${c.id}`}
                   className={`search__res${cursor === i ? ' is-cursor' : ''}`}
+                  style={{ animationDelay: `${i * 22}ms` }}
                   onMouseEnter={() => setCursor(i)}
                   onClick={() => choose({ kind: 'collection', item: c })}
                 >
@@ -206,6 +170,7 @@ export default function SearchOverlay({ open, onClose, onPickCollection }) {
                   <button
                     key={`p${p.id}`}
                     className={`search__res${cursor === idx ? ' is-cursor' : ''}`}
+                    style={{ animationDelay: `${idx * 22}ms` }}
                     onMouseEnter={() => setCursor(idx)}
                     onClick={() => choose({ kind: 'product', item: p })}
                   >

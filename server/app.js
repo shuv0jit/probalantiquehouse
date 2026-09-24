@@ -9,7 +9,7 @@ import { COOKIE_NAME, cookieOptions, requireAdmin, signToken, verifyPassword, ve
 import { allocateCodes, upliftForCode } from './codes.js';
 import { buildDiscountMap, isLive, priceBlock, todayISO } from './pricing.js';
 import { deleteObjects, presignUpload, storageConfigured } from './storage.js';
-import { expandSearchTerms } from './synonyms.js';
+import { expandSearchTerms, closestSuggestion, ENGLISH_VOCAB } from './synonyms.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -341,14 +341,21 @@ app.get(
       );
     }
 
-    const seen = new Set();
+        const seen = new Set();
     const products = [...rows, ...extra].filter((p) => !seen.has(p.id) && seen.add(p.id)).slice(0, 8);
     await attachImages(products);
+
+    let suggestion = null;
+    if (!matchedCollections.length && !products.length) {
+      const vocab = [...ENGLISH_VOCAB, ...collections.map((c) => c.name)];
+      suggestion = closestSuggestion(q, vocab);
+    }
 
     ok(res, {
       collections: matchedCollections,
       products: products.map((p) => shapeProduct(p, map, collectionsById)),
-      expanded: terms.filter((t) => t !== q.toLowerCase()), // the extra terms it also searched
+      expanded: terms.filter((t) => t !== q.toLowerCase()),
+      suggestion,
     });
   })
 );
