@@ -11,6 +11,7 @@
   import { pathTo } from '../lib/format.js';
   import { useLatest, useLocal, useMedia, useReveal } from '../lib/hooks.js';
   import { useStore, useSyncEffect } from '../lib/store.jsx';
+  import { setMetaTag, setCanonical, setJsonLd } from '../lib/seo.js';
 
   const PAGE_SIZE = 24;
 
@@ -97,6 +98,43 @@
     );
 
 useReveal([shown.length, savedOnly, loading, sort, collectionId]);
+
+  useEffect(() => {
+    const siteName = 'Probal Antique House';
+    if (savedOnly) {
+      document.title = `Saved Pieces — ${siteName}`;
+      setMetaTag('name', 'description', 'Your saved jewellery pieces from Probal Antique House, Joypurhat.');
+      setCanonical('/?saved=1');
+      return;
+    }
+    const leaf = trail[trail.length - 1];
+    const title = leaf
+      ? `${leaf.name} — Gold & Antique Jewellery | ${siteName}`
+      : `${siteName} — Gold, Antique & Fashion Jewellery in Joypurhat, Bangladesh`;
+    const description = leaf
+      ? `Shop ${leaf.name} at Probal Antique House, Joypurhat — gold, antique and fashion jewellery (সোনা, গহনা). Browse ${leaf.name} designs with prices and piece numbers.`
+      : "Probal Antique House — Joypurhat's jewellery showroom online. Gold, antique and fashion jewellery: necklace, jhumka, churi, chain, ring, mala and more.";
+
+    document.title = title;
+    setMetaTag('name', 'description', description);
+    setMetaTag('property', 'og:title', title);
+    setMetaTag('property', 'og:description', description);
+    setCanonical(leaf ? `/?c=${leaf.id}` : '/');
+
+    setJsonLd('ld-breadcrumb', {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: `${window.location.origin}/` },
+        ...trail.map((node, i) => ({
+          '@type': 'ListItem',
+          position: i + 2,
+          name: node.name,
+          item: `${window.location.origin}/?c=${node.id}`,
+        })),
+      ],
+    });
+  }, [trail, savedOnly]);
 
   // Warm the connection to the image host as soon as we know it, so the
   // very first product photo doesn't pay a fresh DNS+TLS cost.

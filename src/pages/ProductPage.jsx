@@ -6,6 +6,7 @@ import Gallery from '../components/Gallery.jsx';
 import ProductCard from '../components/ProductCard.jsx';
 import { GridSkeleton } from '../components/Skeleton.jsx';
 import { api } from '../lib/api.js';
+import { setMetaTag, setCanonical, setJsonLd, removeJsonLd } from '../lib/seo.js';
 import { money, pct } from '../lib/format.js';
 import { useLocal, useReveal } from '../lib/hooks.js';
 import { useStore, useSyncEffect } from '../lib/store.jsx';
@@ -41,28 +42,57 @@ export default function ProductPage() {
   }, [code]);
 
   // SEO: unique title + description + og tags per product.
-  useEffect(() => {
+   useEffect(() => {
     const p = data?.product;
     if (!p) return;
     const name = p.title || p.path.map((x) => x.name).join(' · ') || 'Antique piece';
-    document.title = `${name} — No. ${p.code} | Probal Antique House`;
     const desc = p.description
-      || `${name} at Probal Antique House. Piece number ${p.code}${p.price.final != null ? `, ${money(p.price.final)}` : ''}.`;
-    const setMeta = (key, attr, value) => {
-      let el = document.head.querySelector(`meta[${key}="${attr}"]`);
-      if (!el) {
-        el = document.createElement('meta');
-        el.setAttribute(key, attr);
-        document.head.appendChild(el);
-      }
-      el.setAttribute('content', value);
+      || `${name} at Probal Antique House, Joypurhat. Piece number ${p.code}${p.price.final != null ? `, ${money(p.price.final)}` : ''}.`;
+
+    document.title = `${name} — No. ${p.code} | Probal Antique House`;
+    setMetaTag('name', 'description', desc);
+    setMetaTag('property', 'og:title', `${name} — No. ${p.code}`);
+    setMetaTag('property', 'og:description', desc);
+    setMetaTag('property', 'og:type', 'product');
+    if (p.images[0]) setMetaTag('property', 'og:image', p.images[0].url);
+    setCanonical(`/product/${p.code}`);
+
+    setJsonLd('ld-product', {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name,
+      image: p.images.map((i) => i.url),
+      description: desc,
+      sku: p.code,
+      brand: { '@type': 'Brand', name: 'Probal Antique House' },
+      ...(p.price.final != null && {
+        offers: {
+          '@type': 'Offer',
+          priceCurrency: 'BDT',
+          price: p.price.final,
+          availability: 'https://schema.org/InStock',
+          url: window.location.href,
+        },
+      }),
+    });
+
+    setJsonLd('ld-breadcrumb-product', {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: `${window.location.origin}/` },
+        ...p.path.map((node, i) => ({
+          '@type': 'ListItem', position: i + 2, name: node.name, item: `${window.location.origin}/?c=${node.id}`,
+        })),
+        { '@type': 'ListItem', position: p.path.length + 2, name, item: window.location.href },
+      ],
+    });
+
+    return () => {
+      document.title = 'Probal Antique House';
+      removeJsonLd('ld-product');
+      removeJsonLd('ld-breadcrumb-product');
     };
-    setMeta('name', 'description', desc);
-    setMeta('property', 'og:title', `${name} — No. ${p.code}`);
-    setMeta('property', 'og:description', desc);
-    setMeta('property', 'og:type', 'product');
-    if (p.images[0]) setMeta('property', 'og:image', p.images[0].url);
-    return () => { document.title = 'Probal Antique House'; };
   }, [data]);
 
   useReveal([data]);

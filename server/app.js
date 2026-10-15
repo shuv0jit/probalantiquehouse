@@ -149,6 +149,36 @@ app.get(
   })
 );
 
+
+app.get(
+  '/sitemap.xml',
+  h(async (req, res) => {
+    const base = (process.env.SITE_URL || `https://${req.get('host')}`).replace(/\/+$/, '');
+    const [collections, products] = await Promise.all([
+      all('SELECT id FROM collections WHERE deleted_at IS NULL'),
+      all('SELECT code, updated_at, created_at FROM products WHERE deleted_at IS NULL ORDER BY created_at DESC'),
+    ]);
+
+    const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const urls = [`<url><loc>${base}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>`];
+
+    collections.forEach((c) => {
+      urls.push(`<url><loc>${base}/?c=${c.id}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>`);
+    });
+
+    products.forEach((p) => {
+      const lastmod = (p.updated_at || p.created_at || '').slice(0, 10);
+      urls.push(
+        `<url><loc>${base}/product/${esc(p.code)}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}<changefreq>weekly</changefreq><priority>0.7</priority></url>`
+      );
+    });
+
+    res.set('Content-Type', 'application/xml');
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>`);
+  })
+);
+
 /* -------------------------------------------------------------- public */
 
 app.get(
