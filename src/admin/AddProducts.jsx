@@ -41,8 +41,12 @@ export default function AddProducts({ open, onClose, overview, reload, defaultCo
     if (rejected) toast(`${rejected} file${rejected === 1 ? ' was' : 's were'} skipped — images only.`, 'info');
     if (!incoming.length) return;
 
-      const measured = await Promise.all(
-      incoming.map(async (file) => ({ progress: 0, ...(await compressImage(file)) }))
+         const measured = await Promise.all(
+      incoming.map(async (file) => {
+        const full = await compressImage(file, { maxDim: 1600, quality: 0.82 });
+        const thumb = await compressImage(file, { maxDim: 480, quality: 0.75 });
+        return { progress: 0, file: full.file, thumbFile: thumb.file, width: full.width, height: full.height, preview: full.preview };
+      })
     );
 
     setFiles((prev) => {
@@ -102,26 +106,37 @@ export default function AddProducts({ open, onClose, overview, reload, defaultCo
     setBusy(true);
     try {
       // 1. presign
+           // 1. presign — one set of links for the full image, one for the thumbnail
       setStage('Preparing secure upload links…');
-      const { uploads } = await api.post('/admin/uploads/presign', {
+      const { uploads: fullUploads } = await api.post('/admin/uploads/presign', {
         files: files.map((f) => ({ contentType: f.file.type, size: f.file.size })),
+      });
+      const { uploads: thumbUploads } = await api.post('/admin/uploads/presign', {
+        files: files.map((f) => ({ contentType: f.thumbFile.type, size: f.thumbFile.size })),
       });
 
       // 2. upload, four at a time so a big batch doesn't saturate the connection
-      setStage(`Uploading ${files.length} image${files.length === 1 ? '' : 's'}…`);
+           setStage(`Uploading ${files.length} image${files.length === 1 ? '' : 's'}…`);
       const stored = new Array(files.length);
       const queue = files.map((f, i) => ({ f, i }));
       const worker = async () => {
         while (queue.length) {
           const { f, i } = queue.shift();
-          const res = await uploadToStorage(f.file, uploads[i], (p) => {
+          const setProgress = (p) =>
             setFiles((prev) => {
               const next = [...prev];
               if (next[i]) next[i] = { ...next[i], progress: p };
               return next;
             });
-          });
-          stored[i] = { ...res, width: f.width, height: f.height };
+          const [full, thumb] = await Promise.all([
+            uploadToStorage(f.file, fullUploads[i], (p) => setProgress(p * 0.7)),
+            uploadToStorage(f.thumbFile, thumbUploads[i], (p) => setProgress(0.7 + p * 0.3)),
+          ]);
+          stored[i] = {
+            url: full.url, key: full.key,
+            thumbUrl: thumb.url, thumbKey: thumb.key,
+            width: f.width, height: f.height,
+          };
         }
       };
       await Promise.all(Array.from({ length: Math.min(4, files.length) }, worker));

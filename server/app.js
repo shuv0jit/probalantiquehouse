@@ -88,8 +88,8 @@ async function attachImages(products) {
   if (!products.length) return products;
   const ids = products.map((p) => p.id);
   const placeholders = ids.map((_, i) => `?${i + 1}`).join(',');
-  const images = await all(
-    `SELECT product_id, url, key, width, height, position
+   const images = await all(
+    `SELECT product_id, url, key, width, height, position, thumb_url
      FROM product_images WHERE product_id IN (${placeholders})
      ORDER BY position ASC, id ASC`,
     ids
@@ -121,7 +121,7 @@ function shapeProduct(p, discountMap, collectionsById) {
     featured: !!p.featured,
     collectionId: p.collection_id,
     path,
-    images: (p.images || []).map((i) => ({ url: i.url, width: i.width, height: i.height })),
+      images: (p.images || []).map((i) => ({ url: i.url, width: i.width, height: i.height, thumbUrl: i.thumb_url || null })),
     price: priceBlock(p, discountMap.get(p.collection_id)),
     createdAt: p.created_at,
   };
@@ -753,11 +753,11 @@ app.post(
               VALUES (?1, ?2, ?3, ?4, ?5)`,
         params: [code, collectionId, title, price, upliftForCode(code)],
       });
-      imgs.slice(0, 12).forEach((img, idx) => {
+           imgs.slice(0, 12).forEach((img, idx) => {
         statements.push({
-          sql: `INSERT INTO product_images (product_id, url, key, width, height, position)
-                VALUES ((SELECT id FROM products WHERE code = ?1), ?2, ?3, ?4, ?5, ?6)`,
-          params: [code, String(img.url), str(img.key, 300), int(img.width, 0) || null, int(img.height, 0) || null, idx],
+          sql: `INSERT INTO product_images (product_id, url, key, width, height, position, thumb_url)
+                VALUES ((SELECT id FROM products WHERE code = ?1), ?2, ?3, ?4, ?5, ?6, ?7)`,
+          params: [code, String(img.url), str(img.key, 300), int(img.width, 0) || null, int(img.height, 0) || null, idx, img.thumbUrl ? String(img.thumbUrl) : null],
         });
       });
     });

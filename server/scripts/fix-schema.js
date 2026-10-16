@@ -16,7 +16,7 @@ const WANT = {
   },
   product_images: {
     product_id: 'INTEGER', url: 'TEXT', key: 'TEXT', width: 'INTEGER', height: 'INTEGER',
-    position: 'INTEGER NOT NULL DEFAULT 0',
+    position: 'INTEGER NOT NULL DEFAULT 0', thumb_url: 'TEXT',
   },
   sales: {
     name: 'TEXT', discount_percent: 'REAL', starts_at: 'TEXT', ends_at: 'TEXT',

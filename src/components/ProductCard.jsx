@@ -4,29 +4,40 @@ import { Heart, ImageOff } from 'lucide-react';
 import { money } from '../lib/format.js';
 
 /**
- * Compact product card. Loads only the first image eagerly-on-visible
- * (loading="lazy"); the second image is fetched at low priority and cross-fades
- * on hover, which is the cheapest way to make a gallery feel alive.
+ * Compact product card. The second ("alt") image is only for the desktop
+ * hover crossfade — it used to load eagerly for every visible card, which
+ * doubled the number of image requests on page load for no benefit (mobile
+ * has no hover at all). Now it only starts downloading the first time the
+ * card is actually hovered/focused, so a 24-card grid fires 24 requests on
+ * load instead of 48+.
  */
 export default function ProductCard({ product, favourite, onToggleFavourite, index = 0 }) {
   const [loaded, setLoaded] = useState(false);
   const [altLoaded, setAltLoaded] = useState(false);
+  const [wantAlt, setWantAlt] = useState(false);
   const [broken, setBroken] = useState(false);
 
   const [primary, secondary] = product.images;
+  const thumbSrc = primary?.thumbUrl || primary?.url;
   const { final, compare, discountPercent } = product.price;
   const isNew = Date.now() - new Date(product.createdAt).getTime() < 12 * 86400000;
 
   return (
     <article className="card reveal" style={{ transitionDelay: `${Math.min(index, 11) * 28}ms` }}>
-      <Link to={`/product/${product.code}`} className="card__media" aria-label={`View product ${product.code}`}>
+      <Link
+        to={`/product/${product.code}`}
+        className="card__media"
+        aria-label={`View product ${product.code}`}
+        onPointerEnter={() => setWantAlt(true)}
+        onFocus={() => setWantAlt(true)}
+      >
         {primary && !broken ? (
           <>
             <img
               className={`card__img${loaded ? ' is-loaded' : ''}`}
-              src={primary.url}
+              src={thumbSrc}
               alt={product.title || `${product.path.map((p) => p.name).join(' ')} — piece ${product.code}`}
-                           loading={index < 6 ? 'eager' : 'lazy'}
+              loading={index < 6 ? 'eager' : 'lazy'}
               decoding="async"
               fetchpriority={index < 4 ? 'high' : 'auto'}
               width={primary.width || undefined}
@@ -34,15 +45,14 @@ export default function ProductCard({ product, favourite, onToggleFavourite, ind
               onLoad={() => setLoaded(true)}
               onError={() => setBroken(true)}
             />
-            {secondary && (
+            {secondary && wantAlt && (
               <img
                 className={`card__img card__img--alt${altLoaded ? ' is-loaded' : ''}`}
-                src={secondary.url}
+                src={secondary.thumbUrl || secondary.url}
                 alt=""
                 aria-hidden="true"
                 loading="lazy"
                 decoding="async"
-                fetchpriority="low"
                 onLoad={() => setAltLoaded(true)}
               />
             )}
