@@ -41,7 +41,7 @@ export default function Navbar({ onOpenSearch, onOpenMenu, favouriteCount }) {
         <Link to="/" className="nav__brand" aria-label="Probal Antique House, home">
           <span className="nav__mark" aria-hidden="true">P</span>
           <span className="nav__name display">
-            Probal Antique House
+            PAH
             
           </span>
         </Link>
