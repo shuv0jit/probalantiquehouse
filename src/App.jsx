@@ -14,6 +14,7 @@ import ProductPage from './pages/ProductPage.jsx';
 import NotFound from './pages/NotFound.jsx';
 import { useEdgeSwipe, useLocal, useMedia } from './lib/hooks.js';
 import { StoreProvider } from './lib/store.jsx';
+import Cart from './pages/Cart.jsx';
 
 // The admin bundle is split out — customers never download it.
 const AdminApp = lazy(() => import('./admin/AdminApp.jsx'));
@@ -42,6 +43,7 @@ function Storefront() {
       <Routes>
         <Route path="/" element={<Home menuOpen={menuOpen} setMenuOpen={setMenuOpen} />} />
         <Route path="/product/:code" element={<ProductPage />} />
+                <Route path="/cart" element={<Cart />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
 

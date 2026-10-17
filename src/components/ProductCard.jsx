@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Heart, ImageOff } from 'lucide-react';
-import { money } from '../lib/format.js';
+import { money, timeAgo } from '../lib/format.js';
 
 /**
  * Compact product card. The second ("alt") image is only for the desktop
@@ -81,16 +81,13 @@ export default function ProductCard({ product, favourite, onToggleFavourite, ind
       <div className="card__body">
         <span className="card__code">NO. {product.code}</span>
         <span className="card__title">{product.title || product.path[product.path.length - 1]?.name || 'Antique piece'}</span>
-        <div className="card__prices">
-          {final != null ? (
-            <>
-              <span className="price-now">{money(final)}</span>
-              {compare > final && <span className="price-was">{money(compare)}</span>}
-            </>
-          ) : (
-            <span className="price-ask">Price on request</span>
-          )}
-        </div>
+        {final != null && (
+          <div className="card__prices">
+            <span className="price-now">{money(final)}</span>
+            {compare > final && <span className="price-was">{money(compare)}</span>}
+          </div>
+        )}
+        <span className="card__time">{timeAgo(product.createdAt)}</span>
       </div>
     </article>
   );

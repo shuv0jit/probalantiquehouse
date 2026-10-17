@@ -11,7 +11,7 @@
   background:
     radial-gradient(1200px 700px at 78% -8%, var(--blush) 0%, transparent 62%),
     radial-gradient(900px 620px at 6% 4%, var(--gold-wash) 0%, transparent 58%),
-    linear-gradient(178deg, var(--ivory) 0%, var(--ivory-2) 48%, var(--blush) 100%);
+    linear-gradient(178deg, #0f0e0b 0%, var(--ivory) 48%, var(--ivory-2) 100%);
 }
 .aurora__blob {
   position: absolute;
@@ -290,8 +290,8 @@
   padding: 54px 44px 50px;
   border-radius: var(--r-xl);
   background:
-    radial-gradient(700px 300px at 88% 0%, rgba(224, 154, 155, 0.24), transparent 65%),
-    linear-gradient(135deg, #fff 0%, #fffaf8 42%, var(--blush) 100%);
+    radial-gradient(700px 300px at 88% 0%, rgba(200, 154, 76, 0.14), transparent 65%),
+    linear-gradient(135deg, var(--shell) 0%, var(--ivory-2) 42%, var(--blush) 100%);
   border: 1px solid var(--line);
   box-shadow: var(--sh-2);
 }
@@ -732,3 +732,204 @@
 .totop.is-on { opacity: 1; pointer-events: auto; transform: none; }
 .totop:hover { color: var(--rose); border-color: var(--rose-soft); }
 @media (max-width: 560px) { .totop { right: 12px; bottom: 76px; } }
+
+
+/* ================================================= hero banner carousel */
+.hero-banner {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  background: #0b0b0c;
+  /* Taller on bigger screens so it reads as a real hero, not a strip —
+     but capped so it never eats the whole first viewport on a huge monitor. */
+  height: clamp(220px, 34vh, 560px);
+}
+@media (min-width: 1280px) {
+  .hero-banner { height: clamp(320px, 46vh, 640px); }
+}
+
+.hero-banner__track {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  transition: transform 560ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+.hero-banner__slide {
+  flex: 0 0 100%;
+  height: 100%;
+  position: relative;
+  display: grid;
+  place-items: center;
+  background: #0b0b0c;
+}
+.hero-banner__slide img {
+  /* Full image, never cropped. A 9:16 photo is taller than it is wide, so
+     on a wide banner it's height-limited -> black bars left/right.
+     On a narrow (mobile) banner it's width-limited -> black bars top/bottom.
+     object-fit: contain is what guarantees no zoom and no cropping either way. */
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+.hero-banner__caption {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 18px 24px 16px;
+  background: linear-gradient(0deg, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.25) 60%, transparent 100%);
+  color: #fff; text-align: left;
+  pointer-events: none;
+}
+.hero-banner__badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--rose); color: #fff; font-size: 10.5px; font-weight: 600;
+  padding: 3px 10px; border-radius: 99px; margin-bottom: 7px;
+}
+.hero-banner__caption h3 { font-family: var(--font-display); font-size: clamp(16px, 2.6vw, 26px); line-height: 1.15; }
+.hero-banner__caption p { font-size: 12px; opacity: 0.88; margin-top: 3px; }
+
+.hero-banner__about {
+  position: absolute; top: 12px; right: 12px; z-index: 3;
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(255,255,255,0.14); backdrop-filter: blur(8px);
+  color: #fff; font-size: 11px; padding: 6px 12px; border-radius: 99px;
+  border: 1px solid rgba(255,255,255,0.22);
+  transition: background var(--t-fast) var(--ease);
+}
+.hero-banner__about:hover { background: rgba(255,255,255,0.26); }
+
+.hero-banner__nav {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 3;
+  width: 38px; height: 38px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: rgba(255,255,255,0.16); backdrop-filter: blur(6px);
+  color: #fff; border: 1px solid rgba(255,255,255,0.24);
+  transition: background var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+.hero-banner__nav:hover { background: rgba(255,255,255,0.3); transform: translateY(-50%) scale(1.08); }
+.hero-banner__nav--prev { left: 12px; }
+.hero-banner__nav--next { right: 12px; }
+@media (max-width: 560px) { .hero-banner__nav { width: 30px; height: 30px; } }
+
+.hero-banner__dots {
+  position: absolute; left: 0; right: 0; bottom: 10px; z-index: 3;
+  display: flex; justify-content: center; gap: 6px;
+}
+.hero-banner__dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: rgba(255,255,255,0.4);
+  transition: all var(--t-fast) var(--ease);
+}
+.hero-banner__dot.is-active { background: #fff; width: 9px; height: 9px; }
+
+/* ============================================= horizontal collections strip */
+.cstrip { padding: 32px 0 6px; }
+.cstrip__head { display: flex; align-items: center; justify-content: space-between; padding: 0 20px; max-width: var(--page-max); margin: 0 auto; }
+.cstrip__head h2 { font-size: 23px; }
+.cstrip__arrows { display: none; gap: 6px; }
+@media (min-width: 761px) { .cstrip__arrows { display: flex; } }
+.cstrip__arrow {
+  width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+  background: #fff; border: 1px solid var(--line); color: var(--ink-2);
+  transition: all var(--t-fast) var(--ease);
+}
+.cstrip__arrow:hover { border-color: var(--rose-soft); color: var(--rose); }
+
+.cstrip__track {
+  display: flex; gap: 18px; overflow-x: scroll;
+  padding: 16px 20px 8px; max-width: var(--page-max); margin: 0 auto;
+  scrollbar-width: none;
+}
+.cstrip__track::-webkit-scrollbar { display: none; }
+.cstrip__item {
+  flex: 0 0 auto; width: 88px; display: flex; flex-direction: column; align-items: center; gap: 7px;
+}
+.cstrip__circle {
+  width: 80px; height: 80px; border-radius: 50%; overflow: hidden;
+  display: grid; place-items: center;
+  background: linear-gradient(140deg, var(--ivory-2), var(--blush));
+  border: 2px solid #fff; box-shadow: var(--sh-2);
+  color: var(--rose); transition: transform var(--t-base) var(--ease);
+}
+.cstrip__item:hover .cstrip__circle { transform: scale(1.07); }
+.cstrip__circle img { width: 100%; height: 100%; object-fit: cover; }
+.cstrip__name { font-size: 11px; text-align: center; line-height: 1.22; max-width: 88px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.cstrip__count { font-size: 9.5px; color: var(--ink-4); }
+
+/* ================================================================ card time */
+.card__time { font-size: 10px; color: var(--ink-4); margin-top: 1px; }
+
+/* ===================================================================== pager */
+.pager { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 34px; flex-wrap: wrap; }
+.pager__num {
+  width: 34px; height: 34px; border-radius: var(--r-md); font-size: 13px;
+  color: var(--ink-2); border: 1px solid var(--line); background: #fff;
+  transition: all var(--t-fast) var(--ease);
+}
+.pager__num:hover { border-color: var(--rose-soft); color: var(--rose); }
+.pager__num.is-on { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+/* ======================================================================= about */
+.about { background: linear-gradient(180deg, var(--ivory) 0%, var(--blush) 100%); border-top: 1px solid var(--line); padding: 50px 0; }
+.about__in { max-width: 720px; margin: 0 auto; padding: 0 20px; text-align: center; }
+.about__in h2 { font-size: 26px; margin: 10px 0 14px; }
+.about__in p { font-size: 13.5px; color: var(--ink-2); line-height: 1.7; }
+.about__meta { margin-top: 18px; font-size: 12px; color: var(--ink-3); display: flex; justify-content: center; gap: 6px; align-items: center; }
+
+
+/* ======================================================================= cart */
+.nav__cart-badge {
+  position: absolute; top: -4px; right: -4px;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 99px; background: var(--rose); color: #fff;
+  font-size: 9.5px; font-weight: 700; line-height: 16px; text-align: center;
+}
+
+.cart__list { display: flex; flex-direction: column; gap: 12px; }
+.cart__row {
+  display: grid; grid-template-columns: 64px 1fr auto auto; gap: 14px; align-items: center;
+  padding: 12px; border-radius: var(--r-lg); background: var(--shell);
+  border: 1px solid var(--line); box-shadow: var(--sh-1);
+}
+.cart__thumb { width: 64px; height: 64px; border-radius: var(--r-md); object-fit: cover; background: var(--ivory-2); }
+.cart__thumb--empty { border: 1px dashed var(--line-strong); }
+.cart__info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cart__title { font-size: 14px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cart__code {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--ink-3); letter-spacing: 0.04em;
+}
+.cart__copy { color: var(--ink-4); display: grid; place-items: center; }
+.cart__copy:hover { color: var(--rose); }
+.cart__price { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+
+.cart__qty {
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid var(--line-strong); border-radius: var(--r-pill);
+  padding: 4px 10px;
+}
+.cart__qty button { color: var(--ink-2); display: grid; place-items: center; width: 20px; height: 20px; }
+.cart__qty button:hover { color: var(--rose); }
+.cart__qty span { min-width: 16px; text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; }
+
+.cart__remove { color: var(--ink-4); padding: 6px; }
+.cart__remove:hover { color: #b8454b; }
+
+.cart__summary {
+  margin-top: 28px; padding: 20px; border-radius: var(--r-lg);
+  background: var(--blush); border: 1px solid var(--hairline-gold);
+}
+.cart__total { display: flex; justify-content: space-between; align-items: baseline; font-size: 16px; margin-bottom: 8px; }
+.cart__total strong { font-size: 20px; }
+.cart__note { font-size: 12px; color: var(--ink-3); margin-bottom: 16px; }
+.cart__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+@media (max-width: 560px) {
+  .cart__row { grid-template-columns: 52px 1fr; grid-template-areas: "thumb info" "thumb qty"; row-gap: 8px; }
+  .cart__thumb { grid-area: thumb; width: 52px; height: 52px; }
+  .cart__info { grid-area: info; }
+  .cart__qty { grid-area: qty; justify-self: start; }
+  .cart__remove { position: absolute; top: 10px; right: 10px; }
+  .cart__row { position: relative; }
+}

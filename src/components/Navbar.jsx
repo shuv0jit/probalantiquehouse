@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Heart, Lock, Menu, Search } from 'lucide-react';
+import { Heart, Lock, Menu, Search, ShoppingBag } from 'lucide-react';
 import { useStore } from '../lib/store.jsx';
+import { useCart } from '../lib/cart.js';
 
 export default function Navbar({ onOpenSearch, onOpenMenu, favouriteCount }) {
+    const { count } = useCart();
   const [scrolled, setScrolled] = useState(false);
   const { justSynced } = useStore();
   const { pathname, search } = useLocation();
@@ -70,6 +72,11 @@ export default function Navbar({ onOpenSearch, onOpenMenu, favouriteCount }) {
             aria-label={`Saved pieces (${favouriteCount})`}
           >
             <Heart size={17} fill={favouriteCount ? 'currentColor' : 'none'} />
+          </Link>
+
+                    <Link to="/cart" className="nav__icon" style={{ display: 'grid', position: 'relative' }} aria-label={`Cart (${count} item${count === 1 ? '' : 's'})`}>
+            <ShoppingBag size={17} />
+            {count > 0 && <span className="nav__cart-badge">{count}</span>}
           </Link>
 
           <Link to="/admin" className="nav__admin" aria-label="Staff sign in">

@@ -184,7 +184,7 @@ app.get(
 app.get(
   '/api/bootstrap',
   h(async (req, res) => {
-    const [collections, sales, targets, revision, counts] = await Promise.all([
+        const [collections, sales, targets, revision, counts, collectionImages] = await Promise.all([
       loadTree(),
       all('SELECT * FROM sales WHERE deleted_at IS NULL AND active = 1'),
       all('SELECT * FROM sale_targets'),
@@ -193,7 +193,20 @@ app.get(
         `SELECT collection_id, COUNT(*) AS n FROM products
          WHERE deleted_at IS NULL GROUP BY collection_id`
       ),
+      // One representative (newest) photo per collection, for the homepage strip/banner.
+      all(
+        `SELECT collection_id, url, thumb_url FROM (
+           SELECT p.collection_id, pi.url, pi.thumb_url,
+                  ROW_NUMBER() OVER (PARTITION BY p.collection_id ORDER BY p.created_at DESC) AS rn
+           FROM products p
+           JOIN product_images pi ON pi.product_id = p.id AND pi.position = 0
+           WHERE p.deleted_at IS NULL
+         ) WHERE rn = 1`
+      ),
     ]);
+    const imageByCollection = new Map(
+      collectionImages.map((r) => [r.collection_id, r.thumb_url || r.url])
+    );
 
     const today = todayISO();
     const liveSales = sales.filter((s) => isLive(s, today));
@@ -207,24 +220,30 @@ app.get(
       if (!kids.has(k)) kids.set(k, []);
       kids.get(k).push(c);
     });
+       const imageRolled = new Map();
     const rollup = (c) => {
       let total = directCount.get(c.id) || 0;
+      let img = imageByCollection.get(c.id) || null;
       (kids.get(c.id) || []).forEach((child) => {
         total += rollup(child);
+        if (!img) img = imageRolled.get(child.id) || null;
       });
       rolled.set(c.id, total);
+      imageRolled.set(c.id, img);
       return total;
     };
+   
     (kids.get(0) || []).forEach(rollup);
 
     ok(res, {
       revision: Number(revision) || 0,
-      collections: collections.map((c) => ({
+           collections: collections.map((c) => ({
         id: c.id,
         name: c.name,
         slug: c.slug,
         parentId: c.parent_id,
         count: rolled.get(c.id) || 0,
+               image: imageRolled.get(c.id) || null,
       })),
       sales: liveSales.map((s) => ({
         id: s.id,
