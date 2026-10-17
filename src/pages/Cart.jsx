@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useCart } from '../lib/cart.js';
 import { money } from '../lib/format.js';
 
-const WHATSAPP = import.meta.env.WHATSAPP_NUMBER || '';
+const WHATSAPP = import.meta.env.VITE_WHATSAPP_NUMBER || '';
 
 function CopyCode({ code }) {
   const [copied, setCopied] = useState(false);
