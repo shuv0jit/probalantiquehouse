@@ -540,9 +540,12 @@ app.get(
     const collections = await all(
       'SELECT * FROM collections WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC'
     );
-    const products = await all(
-      'SELECT * FROM products WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT 200'
-    );
+   const products = await all(
+  'SELECT * FROM products WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT 90'
+);
+for (let i = 0; i < products.length; i += 90) {
+  await attachImages(products.slice(i, i + 90));
+}
     await attachImages(products);
     const allCols = await loadTree({ includeDeleted: true });
     const byId = new Map(allCols.map((c) => [c.id, c]));
