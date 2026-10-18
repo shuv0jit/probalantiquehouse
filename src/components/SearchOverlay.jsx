@@ -1,28 +1,32 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CornerDownLeft, FolderOpen, Hash, Search, Sparkles, X } from 'lucide-react';
+import { Clock, FolderOpen, Hash, Search, X } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { useDebounced, useEscape, useFocusTrap, useScrollLock } from '../lib/hooks.js';
 import { money } from '../lib/format.js';
 
-/**
- * Search: a top-docked command bar (not a centered popup). Drops down from
- * under the navbar, dims the page behind it, and stays anchored to the top
- * so typing and results feel like one continuous surface rather than a modal.
- * Debounce is short (140ms) and results replace in place — no layout jump —
- * so fast typing never feels like it's fighting the UI.
- */
+const KEY = 'probal_recent_searches';
+const EMPTY = { collections: [], products: [], expanded: [], suggestion: null };
+
+const loadRecent = () => {
+  try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; }
+};
+const storeRecent = (list) => {
+  try { localStorage.setItem(KEY, JSON.stringify(list)); } catch { /* ignore */ }
+};
+
 export default function SearchOverlay({ open, onClose, onPickCollection }) {
   const [q, setQ] = useState('');
-  const [results, setResults] = useState({ collections: [], products: [], expanded: [], suggestion: null });
+  const [results, setResults] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
   const [cursor, setCursor] = useState(0);
+  const [recent, setRecent] = useState(loadRecent);
   const panelRef = useRef(null);
   const inputRef = useRef(null);
   const navigate = useNavigate();
   const debounced = useDebounced(q, 140);
-    const isTypingAhead = q.trim() !== debounced.trim();
-  const isSearching = busy || isTypingAhead;
+  const term = q.trim();
+  const isSearching = busy || term !== debounced.trim();
 
   useScrollLock(open);
   useEscape(onClose, open);
@@ -31,24 +35,21 @@ export default function SearchOverlay({ open, onClose, onPickCollection }) {
   useEffect(() => {
     if (open) {
       setQ('');
-      setResults({ collections: [], products: [], expanded: [], suggestion: null });
+      setResults(EMPTY);
       setCursor(0);
+      setRecent(loadRecent());
       setTimeout(() => inputRef.current?.focus(), 60);
     }
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
-    const term = debounced.trim();
-    if (!term) {
-      setResults({ collections: [], products: [], expanded: [], suggestion: null });
-      setBusy(false);
-      return;
-    }
+    const t = debounced.trim();
+    if (!t) { setResults(EMPTY); setBusy(false); return; }
     const controller = new AbortController();
     setBusy(true);
     api
-      .get(`/search?q=${encodeURIComponent(term)}`, { signal: controller.signal })
+      .get(`/search?q=${encodeURIComponent(t)}`, { signal: controller.signal })
       .then((data) => {
         setResults({
           collections: data.collections,
@@ -58,23 +59,41 @@ export default function SearchOverlay({ open, onClose, onPickCollection }) {
         });
         setCursor(0);
       })
-      .catch((err) => {
-        if (err.name !== 'AbortError') setResults({ collections: [], products: [], expanded: [], suggestion: null });
-      })
+      .catch((err) => { if (err.name !== 'AbortError') setResults(EMPTY); })
       .finally(() => setBusy(false));
     return () => controller.abort();
   }, [debounced, open]);
 
-  const flat = useMemo(
-    () => [
+  const addRecent = (t) => {
+    const v = t.trim();
+    if (!v) return;
+    const next = [v, ...recent.filter((x) => x.toLowerCase() !== v.toLowerCase())].slice(0, 8);
+    setRecent(next);
+    storeRecent(next);
+  };
+
+  const removeRecent = (t) => {
+    const next = recent.filter((x) => x !== t);
+    setRecent(next);
+    storeRecent(next);
+  };
+
+  const flat = useMemo(() => {
+    if (!term) return recent.map((t) => ({ kind: 'recent', item: t }));
+    return [
       ...results.collections.map((c) => ({ kind: 'collection', item: c })),
       ...results.products.map((p) => ({ kind: 'product', item: p })),
-    ],
-    [results]
-  );
+    ];
+  }, [term, recent, results]);
+
+  useEffect(() => {
+    panelRef.current?.querySelector(`[data-idx="${cursor}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [cursor]);
 
   const choose = (entry) => {
     if (!entry) return;
+    if (entry.kind === 'recent') { setQ(entry.item); inputRef.current?.focus(); return; }
+    addRecent(term);
     if (entry.kind === 'collection') onPickCollection(entry.item.id);
     else navigate(`/product/${entry.item.code}`);
     onClose();
@@ -83,130 +102,156 @@ export default function SearchOverlay({ open, onClose, onPickCollection }) {
   const onKeyDown = (e) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setCursor((c) => Math.min(c + 1, flat.length - 1)); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setCursor((c) => Math.max(c - 1, 0)); }
-    else if (e.key === 'Enter') { e.preventDefault(); choose(flat[cursor]); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (flat[cursor]) choose(flat[cursor]);
+      else addRecent(term);
+    }
   };
 
   if (!open) return null;
-  const term = q.trim();
+
+  const cN = term ? results.collections.length : 0;
+  const pN = term ? results.products.length : 0;
+  const noResults = term && !isSearching && cN + pN === 0;
 
   return (
     <div className="search-wrap" role="dialog" aria-modal="true" aria-label="Search">
       <div className="search-scrim" onClick={onClose} />
       <div className="search" ref={panelRef}>
         <div className="search__bar">
-          <Search size={19} style={{ color: 'var(--ink-3)', flex: 'none' }} />
-          <input
-            ref={inputRef}
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder="Search jhumka, kaner dul, or a piece number…"
-            aria-label="Search collections and products"
-            autoComplete="off"
-            inputMode="search"
-          />
-          {busy && <div className="spinner" style={{ width: 16, height: 16 }} aria-hidden="true" />}
-          <button className="search__esc" onClick={onClose} aria-label="Close search">
-            <X size={15} />
-          </button>
+          <div className="search__field">
+            <Search size={19} className="search__bar-ico" />
+            <input
+              ref={inputRef}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={onKeyDown}
+              placeholder="Search jhumka, kaner dul, or a piece number…"
+              aria-label="Search collections and products"
+              autoComplete="off"
+              inputMode="search"
+            />
+            {busy && <div className="spinner" style={{ width: 16, height: 16 }} aria-hidden="true" />}
+            {q && (
+              <button className="search__clear" onClick={() => { setQ(''); inputRef.current?.focus(); }} aria-label="Clear">
+                <X size={15} />
+              </button>
+            )}
+          </div>
+          <button className="search__close" onClick={onClose}>Cancel</button>
         </div>
 
-        {results.expanded.length > 0 && (
-          <div className="search__expanded">
-            <Sparkles size={12} />
-            <span>also matching: {results.expanded.slice(0, 5).join(', ')}</span>
-          </div>
-        )}
-
         <div className="search__body">
-          {!term && (
-            <div className="search__empty">
-              Try <strong>jhumka</strong>, <strong>ঝুমকা</strong>, <strong>kaner dul</strong>, or a piece number like <strong>101245</strong>.
+          {/* Recent searches */}
+          {!term && recent.length > 0 && (
+            <div className="sx-list">
+              <div className="sx-title">Recent searches</div>
+              {recent.map((t, i) => (
+                <div
+                  key={`r${t}`}
+                  data-idx={i}
+                  className={`sx-box${cursor === i ? ' is-cursor' : ''}`}
+                  onMouseEnter={() => setCursor(i)}
+                  onClick={() => choose({ kind: 'recent', item: t })}
+                >
+                  <span className="sx-box__lead"><Clock size={18} /></span>
+                  <span className="sx-box__text">{t}</span>
+                  <button
+                    className="sx-box__x"
+                    onClick={(e) => { e.stopPropagation(); removeRecent(t); }}
+                    aria-label={`Remove ${t}`}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ))}
             </div>
           )}
 
-                    {term && isSearching && (
-            <div className="search__empty search__empty--loading">
+          {!term && recent.length === 0 && (
+            <div className="search__empty">Your recent searches will show up here.</div>
+          )}
+
+          {/* Collections first */}
+          {term && cN > 0 && (
+            <div className="sx-list">
+              <div className="sx-title">Collections</div>
+              {results.collections.map((c, i) => (
+                <div
+                  key={`c${c.id}`}
+                  data-idx={i}
+                  className={`sx-box sx-box--coll${cursor === i ? ' is-cursor' : ''}`}
+                  onMouseEnter={() => setCursor(i)}
+                  onClick={() => choose({ kind: 'collection', item: c })}
+                >
+                  <span className="sx-thumb">
+                    {c.image ? <img src={c.image} alt="" loading="lazy" /> : <FolderOpen size={20} />}
+                  </span>
+                  <span className="sx-box__text sx-box__text--col">
+                    <span className="sx-coll__name">{c.name}</span>
+                    <span className="sx-coll__trail">{c.trail.join('  ›  ')}</span>
+                  </span>
+                  <span className="sx-coll__chip">Shop</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Pieces */}
+          {term && pN > 0 && (
+            <div className="sx-list">
+              <div className="sx-title">Pieces</div>
+              <div className="sx-grid">
+                {results.products.map((p, i) => {
+                  const idx = cN + i;
+                  const last = p.path[p.path.length - 1]?.name;
+                  return (
+                    <button
+                      key={`p${p.id}`}
+                      data-idx={idx}
+                      className={`sx-card${cursor === idx ? ' is-cursor' : ''}`}
+                      onMouseEnter={() => setCursor(idx)}
+                      onClick={() => choose({ kind: 'product', item: p })}
+                    >
+                      <span className="sx-card__img">
+                        {p.images[0] ? <img src={p.images[0].url} alt="" loading="lazy" /> : <Hash size={22} />}
+                      </span>
+                      <span className="sx-card__body">
+                        <span className="sx-card__name">No. {p.code}</span>
+                        {last && <span className="sx-card__cat">{last}</span>}
+                        {p.price.final != null && <span className="sx-card__price">{money(p.price.final)}</span>}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {term && isSearching && cN + pN === 0 && (
+            <div className="search__empty">
               <div className="spinner" aria-hidden="true" />
               <span>Searching…</span>
             </div>
           )}
 
-          {term && !isSearching && flat.length === 0 && (
+          {noResults && (
             <div className="search__empty">
-              Nothing matched "{term}".
-              {results.suggestion && (
-                <>
-                  <br />
-                  Did you mean{' '}
-                  <button className="search__suggest" onClick={() => setQ(results.suggestion)}>
-                    {results.suggestion}
-                  </button>
-                  ?
-                </>
-              )}
+              <span>
+                Nothing matched "{term}".
+                {results.suggestion && (
+                  <>
+                    {' '}Did you mean{' '}
+                    <button className="search__suggest" onClick={() => setQ(results.suggestion)}>
+                      {results.suggestion}
+                    </button>
+                    ?
+                  </>
+                )}
+              </span>
             </div>
           )}
-
-                    {!isSearching && results.collections.length > 0 && (
-            <>
-              <div className="search__group eyebrow">Collections</div>
-              {results.collections.map((c, i) => (
-                <button
-                  key={`c${c.id}`}
-                  className={`search__res${cursor === i ? ' is-cursor' : ''}`}
-                  style={{ animationDelay: `${i * 22}ms` }}
-                  onMouseEnter={() => setCursor(i)}
-                  onClick={() => choose({ kind: 'collection', item: c })}
-                >
-                  <span className="search__ico"><FolderOpen size={17} /></span>
-                  <span className="search__main">
-                    <span className="search__name">{c.name}</span>
-                    <span className="search__sub">{c.trail.join('  ›  ')}</span>
-                  </span>
-                  <CornerDownLeft size={13} style={{ color: 'var(--ink-4)', flex: 'none' }} />
-                </button>
-              ))}
-            </>
-          )}
-
-                   {!isSearching && results.products.length > 0 && (
-            <>
-              <div className="search__group eyebrow">Pieces</div>
-              {results.products.map((p, i) => {
-                const idx = results.collections.length + i;
-                return (
-                  <button
-                    key={`p${p.id}`}
-                    className={`search__res${cursor === idx ? ' is-cursor' : ''}`}
-                    style={{ animationDelay: `${idx * 22}ms` }}
-                    onMouseEnter={() => setCursor(idx)}
-                    onClick={() => choose({ kind: 'product', item: p })}
-                  >
-                    {p.images[0] ? (
-                      <img className="search__thumb" src={p.images[0].url} alt="" loading="lazy" />
-                    ) : (
-                      <span className="search__ico"><Hash size={17} /></span>
-                    )}
-                    <span className="search__main">
-                      <span className="search__name">No. {p.code}</span>
-                      <span className="search__sub">
-                        {p.path.map((x) => x.name).join('  ›  ')}
-                        {p.price.final != null ? `  ·  ${money(p.price.final)}` : ''}
-                      </span>
-                    </span>
-                    <CornerDownLeft size={13} style={{ color: 'var(--ink-4)', flex: 'none' }} />
-                  </button>
-                );
-              })}
-            </>
-          )}
-        </div>
-
-        <div className="search__foot">
-          <span>↑↓ navigate</span>
-          <span>↵ open</span>
-          <span>esc close</span>
         </div>
       </div>
     </div>

@@ -3,36 +3,43 @@ import { ChevronLeft, ChevronRight, Gem } from 'lucide-react';
 
 const SPEED_PX_PER_SEC = 36;
 
-/**
- * Continuously auto-scrolls right-to-left (items drift leftward, new ones
- * enter from the right), loops seamlessly with no jump by rendering the list
- * twice and resetting scrollLeft by exactly one set's width once it's been
- * fully scrolled past — that reset happens on an identical pixel, so it's
- * invisible. Pauses on hover/touch so clicking a collection is reliable.
- */
 export default function CollectionsStrip({ collections, onPick }) {
   const trackRef = useRef(null);
   const pausedRef = useRef(false);
   const resumeTimer = useRef(null);
   const rafRef = useRef(null);
   const lastT = useRef(0);
+  const posRef = useRef(0);
 
   useEffect(() => {
-    if (!collections.length) return;
+    if (!collections.length) return undefined;
     const track = trackRef.current;
-    if (!track) return;
+    if (!track) return undefined;
+
+    const n = collections.length;
+    lastT.current = 0;
+    posRef.current = track.scrollLeft;
 
     const tick = (t) => {
       if (!lastT.current) lastT.current = t;
-      const dt = (t - lastT.current) / 1000;
+      const dt = Math.min((t - lastT.current) / 1000, 0.05);
       lastT.current = t;
 
       if (!pausedRef.current) {
-        const loopWidth = track.scrollWidth / 2;
-        track.scrollLeft += SPEED_PX_PER_SEC * dt;
-        if (loopWidth > 0 && track.scrollLeft >= loopWidth) {
-          track.scrollLeft -= loopWidth;
+        const first = track.children[0];
+        const second = track.children[n];
+        const loopWidth = first && second ? second.offsetLeft - first.offsetLeft : 0;
+
+        // pick up manual / smooth-scroll movement (arrows, touch, wheel)
+        if (Math.abs(track.scrollLeft - posRef.current) > 1.5) {
+          posRef.current = track.scrollLeft;
         }
+
+        posRef.current += SPEED_PX_PER_SEC * dt;
+        if (loopWidth > 0 && posRef.current >= loopWidth) {
+          posRef.current -= loopWidth;
+        }
+        track.scrollLeft = posRef.current;
       }
       rafRef.current = requestAnimationFrame(tick);
     };
@@ -74,7 +81,7 @@ export default function CollectionsStrip({ collections, onPick }) {
         {doubled.map((c, i) => (
           <button key={`${c.id}-${i}`} className="cstrip__item" onClick={() => { pauseThenResume(); onPick(c.id); }}>
             <span className="cstrip__circle">
-              {c.image ? <img src={c.image} alt="" loading="lazy" /> : <Gem size={20} />}
+              {c.image ? <img src={c.image} alt="" loading="lazy" decoding="async" width="56" height="56" /> : <Gem size={20} />}
             </span>
             <span className="cstrip__name">{c.name}</span>
             <span className="cstrip__count">{c.count}</span>
