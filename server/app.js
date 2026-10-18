@@ -694,8 +694,13 @@ app.post(
 app.delete(
   '/api/admin/collections/:id/permanent',
   h(async (req, res) => {
+    const id = int(req.params.id);
     const collections = await loadTree({ includeDeleted: true });
-    const ids = subtreeIds(collections, int(req.params.id));
+    const target = collections.find((c) => c.id === id);
+    if (!target || !target.deleted_at) {
+      return res.status(404).json({ error: 'Collection is not in Deleted Items.' });
+    }
+    const ids = subtreeIds(collections, id);
     const ph = ids.map((_, i) => `?${i + 1}`).join(',');
 
     const keys = (
@@ -718,7 +723,12 @@ app.delete(
       { sql: `DELETE FROM collections WHERE id IN (${ph})`, params: ids },
     ]);
 
-    const storage = await deleteObjects(keys);
+    let storage = {};
+    try {
+      storage = await deleteObjects(keys);
+    } catch (e) {
+      storage = { warning: 'Deleted from database, but some photos could not be removed from storage.' };
+    }
     const revision = await bumpRevision();
     ok(res, { ok: true, revision, ...storage });
   })

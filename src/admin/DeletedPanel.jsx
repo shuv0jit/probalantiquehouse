@@ -1,20 +1,15 @@
 import { useCallback, useState } from 'react';
-import { FolderX, ImageOff, RotateCcw, Trash2 } from 'lucide-react';
+import { ImageOff, RotateCcw, Trash2 } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { money } from '../lib/format.js';
 import { useStore, useSyncEffect } from '../lib/store.jsx';
 import { Confirm } from './ui.jsx';
 
-/**
- * Deleted Items. Restore puts things back exactly where they were;
- * permanent delete removes the records and asks their storage objects to be
- * cleaned up, behind a second confirmation.
- */
 export default function DeletedPanel({ reload }) {
   const { signalChange, toast } = useStore();
   const [data, setData] = useState({ collections: [], products: [] });
   const [loading, setLoading] = useState(true);
-  const [confirm, setConfirm] = useState(null); // {kind, id, label, extra}
+  const [confirm, setConfirm] = useState(null); // {kind, id, label, isCollection} or {kind:'all'}
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -58,7 +53,38 @@ export default function DeletedPanel({ reload }) {
     }
   };
 
-  const empty = !loading && !data.collections.length && !data.products.length;
+  const purgeAll = async () => {
+    setBusy(true);
+    const items = [
+      ...data.collections.map((c) => ['collections', c.id]),
+      ...data.products.map((p) => ['products', p.id]),
+    ];
+    let done = 0;
+    let failed = 0;
+    let lastRev = null;
+    for (const [kind, id] of items) {
+      try {
+        const res = await api.del(`/admin/${kind}/${id}/permanent`);
+        if (res?.revision != null) lastRev = res.revision;
+        done += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (lastRev != null) signalChange(lastRev);
+    setConfirm(null);
+    setBusy(false);
+    await load();
+    reload();
+    toast(
+      failed ? `Deleted ${done}, ${failed} failed. Press Delete all again to retry.` : `Permanently deleted ${done} item${done === 1 ? '' : 's'}.`,
+      failed ? 'error' : 'success'
+    );
+  };
+
+  const total = data.collections.length + data.products.length;
+  const empty = !loading && total === 0;
+  const isAll = confirm?.kind === 'all';
 
   return (
     <>
@@ -68,6 +94,17 @@ export default function DeletedPanel({ reload }) {
             <h3 className="display">Deleted Items is empty</h3>
             <p>Anything you delete lands here first, so nothing is ever lost by accident.</p>
           </div>
+        </div>
+      )}
+
+      {total > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>
+            {total} item{total === 1 ? '' : 's'} in trash
+          </span>
+          <button className="btn btn--danger btn--sm" onClick={() => setConfirm({ kind: 'all' })}>
+            <Trash2 size={14} /> Delete all
+          </button>
         </div>
       )}
 
@@ -150,19 +187,27 @@ export default function DeletedPanel({ reload }) {
 
       <Confirm
         open={!!confirm}
-        onClose={() => setConfirm(null)}
-        onConfirm={purge}
+        onClose={() => !busy && setConfirm(null)}
+        onConfirm={isAll ? purgeAll : purge}
         busy={busy}
         danger
-        title="This action is permanent"
-        confirmLabel="Delete permanently"
+        title={isAll ? 'Delete everything in trash?' : 'This action is permanent'}
+        confirmLabel={isAll ? `Delete all ${total}` : 'Delete permanently'}
         message={
-          <>
-            <strong>{confirm?.label}</strong> and its data will be removed from the database, and its photographs
-            will be deleted from storage.
-            {confirm?.isCollection && ' Every sub-collection and product inside it will also be permanently removed.'}
-            {' '}This cannot be undone. Continue?
-          </>
+          isAll ? (
+            <>
+              All <strong>{data.collections.length} collection(s)</strong> and <strong>{data.products.length} product(s)</strong> listed
+              here will be removed from the database, and their photographs deleted from storage.
+              Sub-collections and products inside deleted collections go too. This cannot be undone. Continue?
+            </>
+          ) : (
+            <>
+              <strong>{confirm?.label}</strong> and its data will be removed from the database, and its photographs
+              will be deleted from storage.
+              {confirm?.isCollection && ' Every sub-collection and product inside it will also be permanently removed.'}
+              {' '}This cannot be undone. Continue?
+            </>
+          )
         }
       />
     </>
